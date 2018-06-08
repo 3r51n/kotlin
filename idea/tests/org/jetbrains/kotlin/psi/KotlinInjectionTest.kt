@@ -612,4 +612,27 @@ class KotlinInjectionTest : AbstractInjectionTest() {
         }
     }
 
+    fun testInjectionOnReturnResultWithAnnotation() = doInjectionPresentTest(
+        """
+            import org.intellij.lang.annotations.Language
+
+            @Language("HTML")
+            fun htmlProvider(): String {
+                return "<ht<caret>ml></html>"
+            }
+            """,
+        languageId = HTMLLanguage.INSTANCE.id, unInjectShouldBePresent = false
+    )
+
+    fun testInjectionExpressionBodyWithAnnotation() = doInjectionPresentTest(
+        """
+            import org.intellij.lang.annotations.Language
+
+            @Language("HTML")
+            fun htmlProvider() = "<ht<caret>ml></html>"
+            """,
+        languageId = HTMLLanguage.INSTANCE.id, unInjectShouldBePresent = false
+    )
+
 }
+

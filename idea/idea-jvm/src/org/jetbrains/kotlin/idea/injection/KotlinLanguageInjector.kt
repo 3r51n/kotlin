@@ -45,6 +45,7 @@ import org.intellij.plugins.intelliLang.inject.config.InjectionPlace
 import org.intellij.plugins.intelliLang.inject.java.JavaLanguageInjectionSupport
 import org.intellij.plugins.intelliLang.util.AnnotationUtilEx
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
+import org.jetbrains.kotlin.descriptors.annotations.Annotated
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.patterns.KotlinFunctionPattern
 import org.jetbrains.kotlin.idea.references.KtReference
@@ -54,6 +55,7 @@ import org.jetbrains.kotlin.idea.util.ProjectRootsUtil
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.annotations.argumentValue
+import org.jetbrains.kotlin.resolve.bindingContextUtil.getTargetFunctionDescriptor
 import org.jetbrains.kotlin.resolve.constants.StringValue
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.util.aliasImportMap
@@ -172,10 +174,17 @@ class KotlinLanguageInjector(
 
     private fun findInjectionInfo(place: KtElement, originalHost: Boolean = true): InjectionInfo? {
         return injectWithExplicitCodeInstruction(place)
-               ?: injectWithCall(place)
-               ?: injectInAnnotationCall(place)
-               ?: injectWithReceiver(place)
-               ?: injectWithVariableUsage(place, originalHost)
+                ?: injectWithCall(place)
+                ?: injectReturnValue(place)
+                ?: injectInAnnotationCall(place)
+                ?: injectWithReceiver(place)
+                ?: injectWithVariableUsage(place, originalHost)
+    }
+
+    private fun injectReturnValue(place: KtElement): InjectionInfo? {
+        val parent = place.parent as? KtReturnExpression ?: return null
+        val functionDescriptor = parent.getTargetFunctionDescriptor(parent.analyze(BodyResolveMode.PARTIAL)) ?: return null
+        return injectionInfoByAnnotation(functionDescriptor)
     }
 
     private fun injectWithExplicitCodeInstruction(host: KtElement): InjectionInfo? {
@@ -339,7 +348,11 @@ class KotlinLanguageInjector(
         val functionDescriptor = ktReference.resolveToDescriptors(bindingContext).singleOrNull() as? FunctionDescriptor ?: return null
 
         val parameterDescriptor = functionDescriptor.valueParameters.getOrNull(argumentIndex) ?: return null
-        val injectAnnotation = parameterDescriptor.annotations.findAnnotation(FqName(AnnotationUtil.LANGUAGE)) ?: return null
+        return injectionInfoByAnnotation(parameterDescriptor)
+    }
+
+    private fun injectionInfoByAnnotation(annotated: Annotated): InjectionInfo? {
+        val injectAnnotation = annotated.annotations.findAnnotation(FqName(AnnotationUtil.LANGUAGE)) ?: return null
 
         val languageId = injectAnnotation.argumentValue("value")?.safeAs<StringValue>()?.value ?: return null
         return InjectionInfo(languageId, null, null)
